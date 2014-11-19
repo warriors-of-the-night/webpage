@@ -34,6 +34,12 @@ class Webpage
         return @nokogiri.xpath("//link[@rel='canonical']") if tag == 'canonical'
         return @nokogiri.xpath("//meta[@name='keywords']") if tag == 'keywords'
         return @nokogiri.xpath("//meta[@name='description']") if tag == 'description'
+        if tag == 'charset'
+            charset = @nokogiri.xpath("//meta[@charset]")[0]['charset'] rescue nil
+            return charset if charset
+            charset = @nokogiri.xpath("//meta[@http-equiv='content-type' or @http-equiv='Content-Type']").attr('content').text.split('=')[1]  rescue nil
+            return charset
+        end
         return @nokogiri.xpath("//#{tag}")
     end
 
@@ -51,7 +57,7 @@ class Webpage
 
     def links
         @links ||= %w(a area).map do |tag|
-            @nokogiri.xpath("//#{tag}")
+            @nokogiri.xpath("//#{tag}[@href and not(@rel='nofollow')]")
         end.flatten
     end
 
@@ -80,10 +86,15 @@ class Webpage
     def links_to_different_domain
         raise '@domain cannot be empty' unless @domain
         @links_to_different_domain ||= links.delete_if do|link|
-            uri = fuzzy_uri(link['href'].to_s)
-            uri.host and uri.host.end_with?@domain
+            begin
+                uri = fuzzy_uri(link['href'].to_s)
+                uri.host.nil? or uri.host.end_with? @domain 
+            rescue
+                next
+            end
         end
     end
+
     def comments
         @nokogiri.xpath("//comment()").map{|comment|comment.to_s}.delete_if{|comment|comment.downcase.start_with?'[if ie' or comment.downcase.include?'google' or comment.downcase.include?'baidu'}
     end
